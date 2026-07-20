@@ -2,6 +2,8 @@
 
 Powerline-style status bar footer for [pi coding agent](https://github.com/earendil-works/pi-coding-agent).
 
+![Example](footer-example.png)
+
 ```
  📁 my-project  ⎇ main  ☁️ anthropic  🤖 claude-sonnet (medium)  🧠 45.2k/200k(22.6%)  💬 12 msgs  🔧 8 tools   14:32:05
 ```
@@ -18,6 +20,7 @@ Displays a Powerline-style footer bar with:
 - 💬 Message count
 - 🔧 Tool call count
 - 🕐 Live clock (24h, right-aligned)
+- ↳ Last user request shown below the editor (truncated to 200 chars)
 
 ## Install
 
@@ -37,7 +40,7 @@ Restart pi to load the extension.
 
 ## Configuration
 
-No configuration needed. The footer activates automatically in TUI mode.
+No configuration needed. The footer and last-request widget activate automatically in TUI mode.
 
 ## License
 

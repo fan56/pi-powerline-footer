@@ -3,8 +3,9 @@
  *
  * Displays: cwd, git branch, provider, model + thinking level,
  * context usage (color-coded), message count, tool call count, live clock.
+ * Also shows the last user request below the editor input.
  *
- * Extracted from pi-ext-fan (Feature 5).
+ * Extracted from pi-ext-fan (Features 5 & 6).
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -148,7 +149,34 @@ function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
 
 function stopPowerline(): void {
   if (footerDispose) { footerDispose(); footerDispose = null; }
-  footerDispose = null;
+}
+
+function showLastRequest(ctx: ExtensionContext): void {
+  const events = ctx.sessionManager?.getBranch?.() ?? [];
+  let lastText = "";
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    if (
+      typeof e === "object" && e !== null &&
+      (e as any).type === "message" &&
+      (e as any).message?.role === "user" &&
+      Array.isArray((e as any).message.content)
+    ) {
+      const parts = (e as any).message.content.filter(
+        (c: any) => c.type === "text" && c.text && c.text.trim()
+      );
+      if (parts.length > 0) {
+        lastText = parts[0].text.trim();
+      }
+      break;
+    }
+  }
+  if (lastText) {
+    const display = lastText.length > 200 ? lastText.slice(0, 200) + "\u2026" : lastText;
+    ctx.ui.setWidget("last-request", [" \u21b3 " + display], { placement: "belowEditor" });
+  } else {
+    ctx.ui.setWidget("last-request", undefined);
+  }
 }
 
 export default function (pi: ExtensionAPI): void {
@@ -160,10 +188,20 @@ export default function (pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     startPowerline(ctx, pi);
+    showLastRequest(ctx);
+  });
+
+  pi.on("agent_end", async (_event, ctx) => {
+    showLastRequest(ctx);
+  });
+
+  pi.on("tool_result", async (_event, ctx) => {
+    showLastRequest(ctx);
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
     stopPowerline();
     ctx.ui.setFooter(undefined);
+    ctx.ui.setWidget("last-request", undefined);
   });
 }
