@@ -20,7 +20,18 @@ Displays a Powerline-style footer bar with:
 - 💬 Message count
 - 🔧 Tool call count
 - 🕐 Live clock (24h, right-aligned)
-- ↳ Last user request shown below the editor (truncated to 200 chars)
+
+### Last Request Widget
+
+Displays your last message below the input box so you can always see what you asked — even after long agent responses scroll it off screen.
+
+```
+ ↳ 执行
+```
+
+- Triggers on `session_start`, `agent_end`, and `tool_result` events
+- Truncated to 200 characters with ellipsis
+- Automatically cleared on session shutdown
 
 ## Install
 
