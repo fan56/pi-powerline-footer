@@ -1,0 +1,23 @@
+{
+  "name": "pi-powerline-footer",
+  "version": "0.1.0",
+  "description": "Powerline-style status bar footer for pi coding agent",
+  "type": "module",
+  "main": "index.ts",
+  "keywords": ["pi", "extension", "powerline", "footer", "status-bar", "pi-package"],
+  "license": "MIT",
+  "author": "fan56",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fan56/pi-powerline-footer.git"
+  },
+  "files": ["index.ts", "README.md", "LICENSE"],
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}
