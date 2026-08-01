@@ -104,7 +104,7 @@ function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
         unsub();
         clearInterval(clockTimer);
       },
-      invalidate() { },
+      invalidate() { tui.requestRender(); },
       render(width: number): string[] {
         const branch = footerData.getGitBranch();
         const provider = ctx.model?.provider || "";
