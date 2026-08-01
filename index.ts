@@ -15,6 +15,20 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 let footerDispose: (() => void) | null = null;
 let currentThinkingLevel: string = "off";
 
+/** All supported thinking levels with display config. */
+const THINKING_LEVELS: Record<string, { icon: string; bg: string }> = {
+  off:     { icon: "○", bg: "#616161" },
+  minimal: { icon: "◔", bg: "#78909C" },
+  low:     { icon: "◑", bg: "#5C6BC0" },
+  medium:  { icon: "◕", bg: "#42A5F5" },
+  high:    { icon: "●", bg: "#26A69A" },
+  xhigh:   { icon: "◉", bg: "#FFA726" },
+  max:     { icon: "★", bg: "#EF5350" },
+};
+function getThinkingConfig(level: string) {
+  return THINKING_LEVELS[level] ?? THINKING_LEVELS.off!;
+}
+
 function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
   if (ctx.mode !== "tui") return;
 
@@ -127,7 +141,8 @@ function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
         if (provider) {
           segs.push({ label: `☁️ ${provider}`, bgHex: "#6A1B9A" });
         }
-        segs.push({ label: `🤖 ${model} (${currentThinkingLevel})`, bgHex: "#5C6BC0" });
+        const thinkCfg = getThinkingConfig(currentThinkingLevel);
+        segs.push({ label: `🤖 ${model} ${thinkCfg.icon} ${currentThinkingLevel}`, bgHex: thinkCfg.bg });
         segs.push({ label: `🧠 ${contextStr}`, bgHex: contextBg });
         segs.push({ label: `💬 ${stats.msgCount} msgs`, bgHex: "#7B1FA2" });
         segs.push({ label: `🔧 ${stats.toolCallCount} tools`, bgHex: "#E64A19" });
