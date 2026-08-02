@@ -20,6 +20,7 @@ Displays a Powerline-style footer bar with:
 - 💬 Message count
 - 🔧 Tool call count
 - 🕐 Live clock (24h, right-aligned)
+- ↳ Last user request shown below the editor (truncated to 200 chars)
 
 ### Last Request Widget
 
