@@ -24,6 +24,27 @@ let currentThinkingLevel: string = "off";
 let currentBranch: string | undefined;
 let sessionGeneration = 0;
 
+/** Whether a blocking UI prompt (select/confirm/input/editor/custom) is
+ *  currently waiting on user input: the agent is paused, not working. */
+let uiPromptActive = false;
+let uiPromptKind: string | undefined;
+let uiPromptTitle: string | undefined;
+/** TUI of the active custom footer, used to re-render on prompt state changes
+ *  (ui_prompt events do NOT flow through the TUI's session handleEvent, so the
+ *  footer is not auto-invalidated for them). */
+let footerTui: TUI | undefined;
+
+/** Return to the "agent working" state if a UI prompt is currently pending.
+ *  Guards against stuck "waiting" states when the agent resumes (new turn,
+ *  tool result) without the matching ui_prompt_end ever arriving. */
+function clearUiPromptIfPending(): void {
+  if (!uiPromptActive) return;
+  uiPromptActive = false;
+  uiPromptKind = undefined;
+  uiPromptTitle = undefined;
+  footerTui?.requestRender();
+}
+
 /** All supported thinking levels with display config. */
 const THINKING_LEVELS: Record<string, { icon: string; bg: string }> = {
   off:     { icon: "○", bg: "#616161" },
@@ -125,6 +146,7 @@ function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
   }
 
   ctx.ui.setFooter((tui, _theme, footerData) => {
+    footerTui = tui;
     currentBranch = footerData.getGitBranch() ?? undefined;
     const unsub = footerData.onBranchChange(() => {
       currentBranch = footerData.getGitBranch() ?? undefined;
@@ -205,6 +227,7 @@ function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
 
     return {
       dispose() {
+        if (footerTui === tui) footerTui = undefined;
         unsub();
         clearInterval(clockTimer);
       },
@@ -242,7 +265,18 @@ function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
         }
         const thinkCfg = getThinkingConfig(currentThinkingLevel);
         segs.push({ label: `🤖 ${model} ${thinkCfg.icon} ${currentThinkingLevel}`, bgHex: thinkCfg.bg });
-        segs.push({ label: `🧠 ${contextStr}`, bgHex: contextBg });
+        // Distinguish "agent is waiting for user input on a UI prompt" from
+        // "agent is working": a distinct ⏸ segment replaces the 🧠 context
+        // segment while a blocking prompt (select/confirm/input/editor/custom)
+        // is pending.
+        if (uiPromptActive) {
+          const waitLabel = uiPromptTitle
+            ? `⏸ ${truncateToWidth(uiPromptTitle.replace(/\s+/g, " ").trim(), 24, "…")}`
+            : (uiPromptKind ? `⏸ ${uiPromptKind}` : "⏸ wait");
+          segs.push({ label: waitLabel, bgHex: "#EF6C00" });
+        } else {
+          segs.push({ label: `🧠 ${contextStr}`, bgHex: contextBg });
+        }
         if ((stats.cacheRead > 0 || stats.cacheWrite > 0) && stats.latestCacheHitRate !== undefined) {
           segs.push({ label: `💰 CH${stats.latestCacheHitRate.toFixed(1)}%`, bgHex: "#00796B" });
         }
@@ -309,17 +343,46 @@ export default function (pi: ExtensionAPI): void {
   });
 
   pi.on("agent_end", async (_event, ctx) => {
+    // An agent run ending means the agent is no longer streaming; a UI prompt
+    // that was pending must have resolved (the run is done). Guard against a
+    // stuck "waiting" state.
+    clearUiPromptIfPending();
     showLastRequest(ctx);
   });
 
   pi.on("tool_result", async (_event, ctx) => {
+    // A tool result implies the agent resumed work; a leftover pending prompt
+    // state is stale (e.g. ui_prompt_start without a matching ui_prompt_end).
+    clearUiPromptIfPending();
     showLastRequest(ctx);
+  });
+
+  pi.on("agent_start", async () => {
+    // A new agent run means the agent is working again; never keep the
+    // "waiting for input" state across a turn boundary.
+    clearUiPromptIfPending();
+  });
+
+  pi.on("ui_prompt_start", async (event) => {
+    uiPromptActive = true;
+    uiPromptKind = event.kind;
+    uiPromptTitle = event.title;
+    footerTui?.requestRender();
+  });
+
+  pi.on("ui_prompt_end", async () => {
+    uiPromptActive = false;
+    uiPromptKind = undefined;
+    uiPromptTitle = undefined;
+    footerTui?.requestRender();
   });
 
   pi.on("session_shutdown", async (event, ctx) => {
     // Invalidate any pending re-assert timer from the outgoing session BEFORE
     // tearing the editor down, so a stale timer can't re-install it.
     sessionGeneration++;
+    clearUiPromptIfPending();
+    footerTui = undefined;
     stopPowerline();
     ctx.ui.setFooter(undefined);
     ctx.ui.setEditorComponent(undefined);
