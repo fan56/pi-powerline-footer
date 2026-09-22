@@ -68,56 +68,82 @@ function formatCwd(cwd: string): string {
   return cwd;
 }
 
+/** Minimal structural type for pi's border status indicators (working /
+ *  compaction / branch-summary / retry spinners) — avoids importing pi's
+ *  internal StatusIndicator type. */
+interface BorderStatusIndicator {
+  renderInBorder(width: number): string;
+  renderSpinnerInBorder(width: number): string;
+}
+
 /**
  * Custom editor that replaces the input's TOP BORDER row with a plain-text
  * info line: cwd + git branch (separator: "│"), in border color only (no
  * powerline background segments). Every other row is left untouched.
+ *
+ * Since pi 0.86 the top border also embeds the busy status (spinner +
+ * message, right-aligned) via `embedWorkingStatus: true`; widths too tight
+ * for cwd + status degrade to a bare spinner, matching pi's own fallback.
  *
  * Branch re-render: the footer's onBranchChange handler already calls
  * tui.requestRender(), which re-renders this editor too, so no extra
  * editor-side requestRender is needed.
  */
 class CwdBorderEditor extends CustomEditor {
+  private statusIndicator: BorderStatusIndicator | undefined;
+
   constructor(
     tui: TUI,
     theme: EditorTheme,
     keybindings: KeybindingsManager,
     private readonly sessionCwd: string,
   ) {
-    super(tui, theme, keybindings, { paddingX: 0 });
+    super(tui, theme, keybindings, { paddingX: 0, embedWorkingStatus: true });
   }
 
-  render(width: number): string[] {
-    const lines = super.render(width);
-    if (lines.length < 2) return lines;
+  setWorkingStatusIndicator(indicator: BorderStatusIndicator | undefined): void {
+    // Intentionally NOT forwarded to super: the parent's private field only
+    // feeds its own embed rendering, which this class fully overrides (the
+    // narrow-width fallback cannot fit a status anyway). StatusIndicator is
+    // not exported from the package entry, hence the structural type.
+    this.statusIndicator = indicator;
+  }
 
+  protected renderTopBorder(width: number, hiddenLineCount: number): string {
     // Too narrow for the info line (needs 3 fixed columns: "─ " prefix + " "
-    // suffix); keep the built-in border row unchanged.
-    if (width < 3) return lines;
-
-    // When scrolled, the built-in top border row is a scroll indicator
-    // ("─── ↑ N more ─…"). Preserve that feedback by appending ↑ N.
-    // (scrollOffset is private on Editor, so detect it from the rendered row.)
-    const scrollMatch = /↑\s*(\d+)/.exec(lines[0]!);
-    const scrollInfo = scrollMatch ? ` ↑ ${scrollMatch[1]}` : "";
+    // suffix); keep the built-in border unchanged.
+    if (width < 3) return super.renderTopBorder(width, hiddenLineCount);
 
     const parts = [`📁 ${formatCwd(this.sessionCwd)}`];
     if (currentBranch) parts.push(`⎇ ${currentBranch}`);
-    const content = parts.join(" │ ") + scrollInfo;
+    // Scrolled-up lines: taken from the parameter — no need to scrape the
+    // rendered border row for "↑ N" anymore.
+    if (hiddenLineCount > 0) parts.push(`↑ ${hiddenLineCount}`);
+    const content = parts.join(" │ ");
 
-    // Reserve 3 fixed columns: "─ " prefix (2) + " " suffix (1). Truncate the
-    // content to the remaining width (suffix "…" marks cut content) and fill
-    // the rest with border dashes so the row is exactly `width` columns wide.
-    const maxContent = Math.max(0, width - 3);
-    const contentText = truncateToWidth(content, maxContent, "…");
-    const fill = Math.max(0, width - 3 - visibleWidth(contentText));
+    // Busy status (spinner + message), self-truncating. Keep at least ~8
+    // columns for the cwd segment; below that only the spinner fits.
+    let status = "";
+    if (this.statusIndicator) {
+      status = this.statusIndicator.renderInBorder(Math.max(1, Math.floor(width * 0.4)));
+      if (visibleWidth(status) > 0 && width - 5 - visibleWidth(status) < 8) {
+        status = this.statusIndicator.renderSpinnerInBorder(3);
+      }
+    }
 
-    lines[0] =
+    const statusW = visibleWidth(status);
+    // Fixed columns: "─ " + " " (3), plus " status ─" (statusW + 2) when set.
+    const overhead = 3 + (statusW > 0 ? statusW + 2 : 0);
+    const contentText = truncateToWidth(content, Math.max(0, width - overhead), "…");
+    const fill = Math.max(0, width - overhead - visibleWidth(contentText));
+
+    return (
       this.borderColor("─ ") +
       this.borderColor(contentText) +
       this.borderColor(" ") +
-      this.borderColor("─".repeat(fill));
-    return lines;
+      this.borderColor("─".repeat(fill)) +
+      (statusW > 0 ? " " + status + this.borderColor("─") : "")
+    );
   }
 }
 
