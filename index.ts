@@ -68,6 +68,19 @@ function formatCwd(cwd: string): string {
   return cwd;
 }
 
+/** Resolve the command name used to launch pi (e.g. "pi" or "pi-durable-tui"). */
+function detectCommandName(): string {
+  const entry = process.argv[1] ?? "";
+  // Experimental forks run their entry from
+  // packages/coding-agent/src/experimental/<name>/main.ts.
+  if (entry.includes("durable-tui")) return "pi-durable-tui";
+  const fork = entry.match(/experimental[/\\]([^/\\]+)[/\\]/);
+  if (fork) return `pi-${fork[1]}`;
+  // The official binary is bundled as dist/bundle/cli.js.
+  return "pi";
+}
+const COMMAND_NAME = detectCommandName();
+
 /** Minimal structural type for pi's border status indicators (working /
  *  compaction / branch-summary / retry spinners) — avoids importing pi's
  *  internal StatusIndicator type. */
@@ -286,6 +299,7 @@ function startPowerline(ctx: ExtensionContext, pi: ExtensionAPI): void {
 
         const stats = getStats();
         const segs: Segment[] = [];
+        segs.push({ label: `🚀 ${COMMAND_NAME}`, bgHex: "#1A237E" });
         if (provider) {
           segs.push({ label: `☁️ ${provider}`, bgHex: "#6A1B9A" });
         }
